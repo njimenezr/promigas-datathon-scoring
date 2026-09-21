@@ -1,0 +1,24 @@
+# Databricks Apps — configuración de la app de scoring (Streamlit).
+# El runtime inyecta STREAMLIT_SERVER_PORT y STREAMLIT_SERVER_ADDRESS=0.0.0.0,
+# por eso NO se fija el puerto en el command.
+command: ["streamlit", "run", "app.py"]
+
+env:
+  # El ID del SQL Warehouse se enlaza desde el resource declarado abajo.
+  - name: DBX_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  # Tabla Delta compartida donde se guardan las respuestas (catalogo.esquema.tabla).
+  - name: DBX_TABLA
+    value: "REEMPLAZAR_CATALOGO.REEMPLAZAR_ESQUEMA.app_respuestas"
+  # Correos de organizadores (coma-separados) que ven la pestaña de revisión.
+  - name: ORGANIZADORES
+    value: "nicolas.jimenez@databricks.com"
+  - name: STREAMLIT_GATHER_USAGE_STATS
+    value: "false"
+
+resources:
+  - name: sql-warehouse
+    description: "SQL Warehouse para leer/escribir las respuestas del datathon"
+    sql_warehouse:
+      id: "REEMPLAZAR_WAREHOUSE_ID"
+      permission: CAN_USE
