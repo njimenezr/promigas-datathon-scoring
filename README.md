@@ -44,9 +44,10 @@ DATABRICKS_CONFIG_PROFILE=<perfil> DBX_WAREHOUSE_ID=<id> DBX_TABLA=<...> \
 
 1. **Clona este repo** como Git folder en el workspace **compartido de Promigas** (o `databricks sync .`).
 2. Edita `app.yaml`:
+   - `DBX_WAREHOUSE_ID` = **ID del SQL Warehouse** (valor directo; más robusto que `valueFrom`, que solo resuelve si el resource ya está registrado al desplegar).
    - `DBX_TABLA` = catálogo.esquema.tabla donde se guardan las respuestas.
    - `ORGANIZADORES` = correos que verán la pestaña de revisión.
-   - En el bloque `resources`, pon el **ID del SQL Warehouse** real (`resources[0].sql_warehouse.id`). El runtime lo enlaza a la env var `DBX_WAREHOUSE_ID` vía `valueFrom: sql-warehouse`.
+   - En el bloque `resources`, pon el **mismo** warehouse id (esto le otorga `CAN_USE` al service principal de la app).
 3. Crea y despliega la app:
    ```bash
    databricks apps create promigas-datathon-scoring

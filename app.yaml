@@ -4,9 +4,10 @@
 command: ["streamlit", "run", "app.py"]
 
 env:
-  # El ID del SQL Warehouse se enlaza desde el resource declarado abajo.
+  # ID del SQL Warehouse como valor directo (más robusto que valueFrom, que
+  # solo resuelve si el resource ya está registrado al desplegar).
   - name: DBX_WAREHOUSE_ID
-    valueFrom: sql-warehouse
+    value: "REEMPLAZAR_WAREHOUSE_ID"
   # Tabla Delta compartida donde se guardan las respuestas (catalogo.esquema.tabla).
   - name: DBX_TABLA
     value: "REEMPLAZAR_CATALOGO.REEMPLAZAR_ESQUEMA.app_respuestas"
@@ -16,6 +17,8 @@ env:
   - name: STREAMLIT_GATHER_USAGE_STATS
     value: "false"
 
+# El resource le otorga CAN_USE al service principal de la app sobre el warehouse.
+# (El ID de arriba debe ser el mismo warehouse.)
 resources:
   - name: sql-warehouse
     description: "SQL Warehouse para leer/escribir las respuestas del datathon"
