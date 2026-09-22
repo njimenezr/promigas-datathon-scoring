@@ -12,7 +12,7 @@ from typing import Optional
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.sql import StatementParameterListItem
 
-from .logic import Registro, POR_ID
+from .logic import Registro, POR_ID, parse_numero, CAMPOS_CASO, DIMS_JUEZ_A, CRITERIOS_B
 
 WAREHOUSE_ID = os.getenv("DBX_WAREHOUSE_ID", "")
 TABLA = os.getenv("DBX_TABLA", "")
@@ -34,6 +34,11 @@ class Store:
             raise ValueError(
                 "Falta DBX_TABLA: configura tu tabla (catalogo.esquema.tabla) "
                 "en app.yaml antes de desplegar.")
+        # Tablas hermanas (mismo catálogo.esquema) para casos y calificaciones.
+        base = self.tabla.rsplit(".", 1)[0]
+        self.tabla_casos = f"{base}.app_casos"
+        self.tabla_calif_a = f"{base}.app_calif_a"
+        self.tabla_votos_b = f"{base}.app_votos_b"
 
     # ------------------------------------------------------------------
     def _exec(self, statement: str, params: Optional[list] = None):
@@ -63,6 +68,29 @@ class Store:
                 id STRING, usuario STRING, track STRING, nivel STRING, pregunta STRING,
                 valor STRING, prompt STRING, correcto BOOLEAN, puntos INT,
                 estado STRING, ts DOUBLE
+            ) USING DELTA
+        """)
+        # Caso del millón (uno por equipo)
+        self._exec(f"""
+            CREATE TABLE IF NOT EXISTS {self.tabla_casos} (
+                id STRING, equipo STRING, area STRING, integrantes STRING,
+                nombre_caso STRING, problema STRING, empresas STRING, palanca STRING,
+                millon STRING, databricks_ia STRING, link STRING,
+                creado_por STRING, ts DOUBLE
+            ) USING DELTA
+        """)
+        # Calificación de la presentación A (una fila por participante × juez)
+        self._exec(f"""
+            CREATE TABLE IF NOT EXISTS {self.tabla_calif_a} (
+                id STRING, participante STRING, juez STRING,
+                arquitectura INT, ia INT, valor INT, comunicacion INT, ts DOUBLE
+            ) USING DELTA
+        """)
+        # Voto del jurado a los casos B (una fila por equipo × juez)
+        self._exec(f"""
+            CREATE TABLE IF NOT EXISTS {self.tabla_votos_b} (
+                id STRING, equipo STRING, juez STRING,
+                cuantificable INT, cross_company INT, factible INT, databricks_ia INT, ts DOUBLE
             ) USING DELTA
         """)
 
@@ -143,3 +171,92 @@ class Store:
             f"""DELETE FROM {self.tabla}
                 WHERE usuario = :u AND pregunta = :q AND estado = 'pendiente'""",
             [self._s("u", usuario), self._s("q", pregunta_id)])
+
+    # ------------------------------------------------------------------ DBUs
+    def dbu_por_usuario(self) -> dict:
+        """{usuario: dbus} a partir del valor registrado en la pregunta de DBUs
+        (DE-DBU/AE-DBU). Toma el último registro por usuario. Alimenta el score A."""
+        filas = self._filas(
+            f"""SELECT usuario, valor, ts FROM {self.tabla}
+                WHERE pregunta IN ('DE-DBU', 'AE-DBU')""")
+        ultimo: dict[str, tuple] = {}   # usuario -> (ts, valor)
+        for usuario, valor, ts in filas:
+            t = float(ts)
+            if usuario not in ultimo or t > ultimo[usuario][0]:
+                ultimo[usuario] = (t, valor)
+        out = {}
+        for usuario, (_t, valor) in ultimo.items():
+            n = parse_numero(valor, "float")
+            if n is not None:
+                out[usuario] = n
+        return out
+
+    # ------------------------------------------------------------------ Casos (B)
+    def guardar_caso(self, datos: dict, creado_por: str):
+        """Upsert por equipo: 1 caso por equipo. `datos` con las claves de CAMPOS_CASO."""
+        equipo = (datos.get("equipo") or "").strip()
+        self._exec(f"DELETE FROM {self.tabla_casos} WHERE equipo = :e",
+                   [self._s("e", equipo)])
+        cols = CAMPOS_CASO  # equipo, area, integrantes, ...
+        placeholders = ", ".join(f":{c}" for c in cols)
+        params = [self._s(c, datos.get(c, "")) for c in cols]
+        self._exec(
+            f"""INSERT INTO {self.tabla_casos}
+                (id, {", ".join(cols)}, creado_por, ts)
+                VALUES (:id, {placeholders}, :cb, CAST(:ts AS DOUBLE))""",
+            [self._s("id", uuid.uuid4().hex), *params,
+             self._s("cb", creado_por), self._s("ts", time.time())])
+
+    def listar_casos(self) -> list[dict]:
+        cols = ["id", *CAMPOS_CASO, "creado_por", "ts"]
+        filas = self._filas(
+            f"SELECT {', '.join(cols)} FROM {self.tabla_casos} ORDER BY equipo")
+        return [dict(zip(cols, f)) for f in filas]
+
+    def eliminar_caso(self, equipo: str):
+        self._exec(f"DELETE FROM {self.tabla_casos} WHERE equipo = :e",
+                   [self._s("e", equipo)])
+
+    # ------------------------------------------------------------------ Calificación A (jurado)
+    def guardar_calif_a(self, participante: str, juez: str, scores: dict):
+        """Upsert de la calificación de un juez a un participante (dims 1-5)."""
+        self._exec(
+            f"DELETE FROM {self.tabla_calif_a} WHERE participante = :p AND juez = :j",
+            [self._s("p", participante), self._s("j", juez)])
+        self._exec(
+            f"""INSERT INTO {self.tabla_calif_a}
+                (id, participante, juez, arquitectura, ia, valor, comunicacion, ts)
+                VALUES (:id, :p, :j, CAST(:a AS INT), CAST(:i AS INT),
+                        CAST(:v AS INT), CAST(:c AS INT), CAST(:ts AS DOUBLE))""",
+            [self._s("id", uuid.uuid4().hex), self._s("p", participante), self._s("j", juez),
+             self._s("a", scores.get("arquitectura", 0)), self._s("i", scores.get("ia", 0)),
+             self._s("v", scores.get("valor", 0)), self._s("c", scores.get("comunicacion", 0)),
+             self._s("ts", time.time())])
+
+    def calif_a(self) -> list[dict]:
+        cols = ["participante", "juez", *DIMS_JUEZ_A]
+        filas = self._filas(
+            f"SELECT participante, juez, arquitectura, ia, valor, comunicacion FROM {self.tabla_calif_a}")
+        return [dict(zip(cols, [f[0], f[1], int(f[2]), int(f[3]), int(f[4]), int(f[5])])) for f in filas]
+
+    # ------------------------------------------------------------------ Votos B (jurado)
+    def guardar_voto_b(self, equipo: str, juez: str, scores: dict):
+        """Upsert del voto de un juez a un caso (criterios 1-5)."""
+        self._exec(
+            f"DELETE FROM {self.tabla_votos_b} WHERE equipo = :e AND juez = :j",
+            [self._s("e", equipo), self._s("j", juez)])
+        self._exec(
+            f"""INSERT INTO {self.tabla_votos_b}
+                (id, equipo, juez, cuantificable, cross_company, factible, databricks_ia, ts)
+                VALUES (:id, :e, :j, CAST(:q AS INT), CAST(:x AS INT),
+                        CAST(:f AS INT), CAST(:d AS INT), CAST(:ts AS DOUBLE))""",
+            [self._s("id", uuid.uuid4().hex), self._s("e", equipo), self._s("j", juez),
+             self._s("q", scores.get("cuantificable", 0)), self._s("x", scores.get("cross_company", 0)),
+             self._s("f", scores.get("factible", 0)), self._s("d", scores.get("databricks_ia", 0)),
+             self._s("ts", time.time())])
+
+    def votos_b(self) -> list[dict]:
+        cols = ["equipo", "juez", *CRITERIOS_B]
+        filas = self._filas(
+            f"SELECT equipo, juez, cuantificable, cross_company, factible, databricks_ia FROM {self.tabla_votos_b}")
+        return [dict(zip(cols, [f[0], f[1], int(f[2]), int(f[3]), int(f[4]), int(f[5])])) for f in filas]

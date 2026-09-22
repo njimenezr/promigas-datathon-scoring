@@ -99,5 +99,34 @@ puntos = {f["usuario"]: f["puntos"] for f in lb3}
 check("evidencia pendiente NO suma (ana=0/ausente)", puntos.get("ana", 0) == 0)
 check("evidencia aprobada suma 40 (beto)", puntos.get("beto") == 40)
 
+print("\n== Multiplicador de DBUs (equilibrio a la mediana, simétrico) ==")
+grupo = [1, 3, 5, 5, 7, 9, 40]   # 40 = derrochón (outlier)
+med = sorted(grupo)[len(grupo) // 2]
+check("en la mediana => 1.0", L.multiplicador_dbu(med, grupo) == 1.0)
+check("cerca de la mediana (zona sana) => 1.0", L.multiplicador_dbu(5, grupo) == 1.0)
+check("mínimo (no usó IA) => piso 0.3", abs(L.multiplicador_dbu(1, grupo) - 0.3) < 1e-9)
+check("máximo (derrochó) => piso 0.3", abs(L.multiplicador_dbu(40, grupo) - 0.3) < 1e-9)
+check("sin valor (no registró) => piso 0.3", L.multiplicador_dbu(None, grupo) == 0.3)
+check("simétrico: bajo y alto en zona intermedia dan >piso y <1",
+      0.3 < L.multiplicador_dbu(2, grupo) < 1.0 and 0.3 < L.multiplicador_dbu(20, grupo) < 1.0)
+
+print("\n== Puntaje final A (0-100, ponderado) ==")
+maxde = L.max_puntos_track("data_engineer")
+# perfecto: 100% datathon, DBUs en mediana (1.0), jurado 5/5 en todo -> 100
+jur_top = {d: [5, 5] for d in L.DIMS_JUEZ_A}
+r = L.score_a("data_engineer", maxde, med, grupo, jur_top)
+check("A perfecto ~100", round(r["total"]) == 100)
+check("componentes presentes", set(r["componentes"]) == set(L.PESOS_A))
+# solo datathon completo, sin DBUs útiles ni jurado -> 25% * 100 + 10%*30(piso) = 28
+r2 = L.score_a("data_engineer", maxde, 1, grupo, {})
+check("solo datathon + DBUs piso, sin jurado ~28", round(r2["total"]) == 28)
+check("pesos suman 1.0", abs(sum(L.PESOS_A.values()) - 1.0) < 1e-9)
+
+print("\n== Puntaje caso B ==")
+check("caso 5/5 en todo => 100", L.score_caso_b({c: [5] for c in L.CRITERIOS_B}) == 100.0)
+check("caso sin votos => 0", L.score_caso_b({}) == 0.0)
+check("caso promedio de 2 jueces (4 y 2 => 3 => 60)",
+      L.score_caso_b({c: [4, 2] for c in L.CRITERIOS_B}) == 60.0)
+
 print("\n" + ("🎉 TODAS LAS PRUEBAS PASARON" if fallos == 0 else f"⚠️  {fallos} PRUEBAS FALLARON"))
 raise SystemExit(1 if fallos else 0)

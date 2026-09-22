@@ -287,3 +287,130 @@ def leaderboard(registros: list[Registro], track: Optional[str] = None) -> list[
     for i, f in enumerate(filas, 1):
         f["puesto"] = i
     return filas
+
+
+# ===========================================================================
+# PIEZA A — Calificación final individual (7 min)
+# Combina componentes automáticos (de la app) + calificación de jurado.
+# ===========================================================================
+PISO_DBU = 0.3   # multiplicador mínimo por DBUs (fuera de la zona sana)
+
+# Dimensiones que califica el jurado (1-5)
+DIMS_JUEZ_A = ["arquitectura", "ia", "valor", "comunicacion"]
+DIM_A_LABEL = {
+    "arquitectura": "🏗️ Arquitectura Databricks",
+    "ia": "🤖 Uso de IA",
+    "valor": "💰 Valor de negocio",
+    "comunicacion": "🗣️ Comunicación (7 min)",
+}
+
+# Pesos del puntaje final de A (suman 1.0)
+PESOS_A = {
+    "datathon":     0.25,   # automático: puntaje del leaderboard
+    "dbu":          0.10,   # automático: DBUs de Genie (equilibrio a la mediana)
+    "arquitectura": 0.20,   # jurado
+    "ia":           0.15,   # jurado
+    "valor":        0.20,   # jurado
+    "comunicacion": 0.10,   # jurado
+}
+
+
+def _percentil(xs_ordenados: list[float], p: float) -> float:
+    """Percentil p (0-100) por interpolación lineal (método 'linear' de numpy)."""
+    if not xs_ordenados:
+        return 0.0
+    if len(xs_ordenados) == 1:
+        return float(xs_ordenados[0])
+    k = (len(xs_ordenados) - 1) * (p / 100.0)
+    f = int(k)
+    c = min(f + 1, len(xs_ordenados) - 1)
+    if f == c:
+        return float(xs_ordenados[f])
+    return xs_ordenados[f] + (xs_ordenados[c] - xs_ordenados[f]) * (k - f)
+
+
+def multiplicador_dbu(valor: Optional[float], todos: list[float], piso: float = PISO_DBU) -> float:
+    """Multiplicador (piso..1.0) por consumo de DBUs de Genie, con EQUILIBRIO a la mediana:
+    1.0 en la zona sana [P25, P75] del grupo; decae linealmente a `piso` en los extremos
+    (mín/máx). Simétrico: quedarse corto (no usar IA) y pasarse (mal uso) penalizan igual.
+    Se calcula al final, cuando ya están todos los valores del grupo."""
+    xs = sorted(float(v) for v in todos if v is not None)
+    if not xs or valor is None:
+        return piso
+    v = float(valor)
+    p25, p75 = _percentil(xs, 25), _percentil(xs, 75)
+    lo, hi = xs[0], xs[-1]
+    if p25 <= v <= p75:
+        return 1.0
+    if v < p25:
+        if p25 <= lo:
+            return 1.0
+        frac = max(0.0, (v - lo) / (p25 - lo))      # 0 en lo, 1 en p25
+        return piso + (1.0 - piso) * frac
+    # v > p75
+    if hi <= p75:
+        return 1.0
+    frac = max(0.0, (hi - v) / (hi - p75))           # 1 en p75, 0 en hi
+    return piso + (1.0 - piso) * frac
+
+
+def max_puntos_track(track: str) -> int:
+    """Puntaje máximo alcanzable en un track (todas las preguntas del track)."""
+    return sum(p.puntos for p in PREGUNTAS if p.track == track)
+
+
+def _comp_datathon(puntos: float, track: str) -> float:
+    m = max_puntos_track(track)
+    return (float(puntos) / m * 100.0) if m else 0.0
+
+
+def _comp_juez(scores_1a5: list[float]) -> float:
+    """Promedio de los jueces (1-5) escalado a 0-100. Sin calificaciones => 0."""
+    if not scores_1a5:
+        return 0.0
+    return (sum(scores_1a5) / len(scores_1a5)) / 5.0 * 100.0
+
+
+def score_a(track: str, puntos_datathon: float, dbu_valor: Optional[float],
+            dbus_todos: list[float], jurado_por_dim: dict) -> dict:
+    """Puntaje final de A (0-100) desglosado por componente.
+    `jurado_por_dim`: {dim: [scores 1-5 de cada juez]}."""
+    comp = {
+        "datathon": _comp_datathon(puntos_datathon, track),
+        "dbu": multiplicador_dbu(dbu_valor, dbus_todos) * 100.0,
+    }
+    for dim in DIMS_JUEZ_A:
+        comp[dim] = _comp_juez(jurado_por_dim.get(dim, []))
+    total = sum(comp[k] * PESOS_A[k] for k in PESOS_A)
+    return {"total": total, "componentes": comp}
+
+
+# ===========================================================================
+# PIEZA B — Caso del millón (por equipos)
+# ===========================================================================
+CAMPOS_CASO = [
+    "equipo", "area", "integrantes", "nombre_caso", "problema",
+    "empresas", "palanca", "millon", "databricks_ia", "link",
+]
+
+# Criterios que vota el jurado (1-5)
+CRITERIOS_B = ["cuantificable", "cross_company", "factible", "databricks_ia"]
+CRIT_B_LABEL = {
+    "cuantificable": "📏 Cuantificable",
+    "cross_company": "🏢 Cross-company (varias empresas del grupo)",
+    "factible": "🛠️ Factible (datos que existen)",
+    "databricks_ia": "⚡ Habilitado por Databricks + IA",
+}
+
+
+def score_caso_b(votos_por_criterio: dict) -> float:
+    """Puntaje de un caso (0-100): promedio de criterios (cada uno promediado
+    entre jueces), escalado a 0-100. `votos_por_criterio`: {criterio: [1-5,...]}."""
+    vals = []
+    for c in CRITERIOS_B:
+        vs = votos_por_criterio.get(c, [])
+        if vs:
+            vals.append(sum(vs) / len(vs))
+    if not vals:
+        return 0.0
+    return (sum(vals) / len(vals)) / 5.0 * 100.0
