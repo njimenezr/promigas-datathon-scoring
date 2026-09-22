@@ -59,7 +59,8 @@ DATABRICKS_CONFIG_PROFILE=<perfil> DBX_WAREHOUSE_ID=<id> DBX_TABLA=<...> \
 4. Da permisos al **service principal** de la app:
    - `CAN USE` sobre el SQL Warehouse (o añádelo como resource en la UI, que otorga CAN_USE).
    - `USE CATALOG` / `USE SCHEMA` / `MODIFY` + `SELECT` sobre el esquema de `DBX_TABLA`.
-   - La tabla se crea sola al primer arranque (`CREATE TABLE IF NOT EXISTS`) si el SP tiene `CREATE TABLE`. Si no quieres dar `CREATE TABLE`, **pre-crea la tabla** con [`sql/00_setup_tabla.sql`](sql/00_setup_tabla.sql) y deja al SP solo `MODIFY`/`SELECT`.
+   - Las tablas se crean solas al primer arranque (`CREATE TABLE IF NOT EXISTS`) si el SP tiene `CREATE TABLE`. Si no quieres dar `CREATE TABLE`, **pre-crea todo** con [`sql/00_setup.sql`](sql/00_setup.sql) (crea las 4 tablas y otorga los permisos; solo editas 3 variables) y deja al SP solo `MODIFY`/`SELECT`.
+   - La app usa 4 tablas en el mismo esquema de `DBX_TABLA`: `app_respuestas` (reto), `app_casos` y `app_votos_b` (caso del millón), `app_calif_a` (calificación de presentaciones).
 5. Comparte la app con los participantes (necesitan cuenta y permiso en ese workspace — las apps **no** son públicas).
 
 **Identidad:** desplegada, la app toma el usuario del header `X-Forwarded-Email` que inyecta Databricks Apps (no configures `DEV_USUARIO`; eso es solo para local).
