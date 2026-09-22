@@ -8,9 +8,13 @@ env:
   # solo resuelve si el resource ya está registrado al desplegar).
   - name: DBX_WAREHOUSE_ID
     value: "c6d413e83558a43d"
-  # Tabla Delta compartida donde se guardan las respuestas (catalogo.esquema.tabla).
+  # Tabla Delta compartida donde se guardan las respuestas.
+  # 👉 EL CLIENTE DEBE PONER AQUÍ SU TABLA (catalogo.esquema.tabla) antes de desplegar.
+  #    Si se deja el placeholder, la app no arranca y muestra instrucciones de configuración.
+  #    El service principal de la app necesita USE CATALOG/USE SCHEMA + SELECT/MODIFY
+  #    sobre ese esquema (o pre-crea la tabla con sql/00_setup_tabla.sql y da solo SELECT/MODIFY).
   - name: DBX_TABLA
-    value: "serverless_demo_nj_catalog.promigas_datathon.app_respuestas"
+    value: "REEMPLAZAR_CATALOGO.REEMPLAZAR_ESQUEMA.app_respuestas"
   # Correos de organizadores (coma-separados) que ven la pestaña de revisión.
   - name: ORGANIZADORES
     value: "nicolas.jimenez@databricks.com"

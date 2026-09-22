@@ -39,6 +39,12 @@ def get_store():
 usuario = usuario_actual()
 try:
     store = get_store()
+except ValueError as e:
+    # Error de configuración (p. ej. falta DBX_TABLA / DBX_WAREHOUSE_ID)
+    st.error(f"⚙️ Falta configurar la app: {e}")
+    st.info("Edita **`app.yaml`** y define `DBX_TABLA` con tu `catalogo.esquema.tabla` "
+            "(y `DBX_WAREHOUSE_ID` con tu SQL Warehouse). Luego vuelve a desplegar.")
+    st.stop()
 except Exception as e:
     st.error(f"No se pudo conectar al almacenamiento: {e}")
     st.stop()

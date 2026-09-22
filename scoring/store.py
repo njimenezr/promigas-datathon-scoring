@@ -15,7 +15,12 @@ from databricks.sdk.service.sql import StatementParameterListItem
 from .logic import Registro, POR_ID
 
 WAREHOUSE_ID = os.getenv("DBX_WAREHOUSE_ID", "")
-TABLA = os.getenv("DBX_TABLA", "serverless_demo_nj_catalog.promigas_datathon.app_respuestas")
+TABLA = os.getenv("DBX_TABLA", "")
+
+
+def _tabla_sin_configurar(t: str) -> bool:
+    """True si la tabla no está configurada o sigue con el placeholder de app.yaml."""
+    return (not t) or ("REEMPLAZAR" in t.upper())
 
 
 class Store:
@@ -25,6 +30,10 @@ class Store:
         self.tabla = tabla or TABLA
         if not self.warehouse_id:
             raise ValueError("Falta DBX_WAREHOUSE_ID")
+        if _tabla_sin_configurar(self.tabla):
+            raise ValueError(
+                "Falta DBX_TABLA: configura tu tabla (catalogo.esquema.tabla) "
+                "en app.yaml antes de desplegar.")
 
     # ------------------------------------------------------------------
     def _exec(self, statement: str, params: Optional[list] = None):
