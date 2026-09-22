@@ -92,6 +92,9 @@ with tabs[0]:
                 ya = q.id in ids_ok
                 col1, col2 = st.columns([3, 1])
                 col1.markdown(f"**{q.id}.** {q.texto}")
+                if q.consulta:
+                    col1.caption("Copia y pega esta consulta en un editor SQL, córrela una vez y registra tu total de DBUs:")
+                    col1.code(q.consulta, language="sql")
                 if ya:
                     col2.success("✅ Resuelta")
                     continue
@@ -101,6 +104,11 @@ with tabs[0]:
                                for r in store.respuestas_usuario(usuario))
                     if pend:
                         col2.info("⏳ En revisión")
+                        if col2.button("↩️ Rehacer", key=f"redo_{q.id}",
+                                       help="Elimina tu envío en revisión y habilita "
+                                            "de nuevo el formulario para reenviarlo"):
+                            store.eliminar_pendiente(usuario, q.id)
+                            st.rerun()
                         continue
                 with st.form(f"form_{q.id}", clear_on_submit=True):
                     if q.tipo == "evidencia":

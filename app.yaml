@@ -7,10 +7,10 @@ env:
   # ID del SQL Warehouse como valor directo (más robusto que valueFrom, que
   # solo resuelve si el resource ya está registrado al desplegar).
   - name: DBX_WAREHOUSE_ID
-    value: "REEMPLAZAR_WAREHOUSE_ID"
+    value: "c6d413e83558a43d"
   # Tabla Delta compartida donde se guardan las respuestas (catalogo.esquema.tabla).
   - name: DBX_TABLA
-    value: "REEMPLAZAR_CATALOGO.REEMPLAZAR_ESQUEMA.app_respuestas"
+    value: "serverless_demo_nj_catalog.promigas_datathon.app_respuestas"
   # Correos de organizadores (coma-separados) que ven la pestaña de revisión.
   - name: ORGANIZADORES
     value: "nicolas.jimenez@databricks.com"
@@ -23,5 +23,5 @@ resources:
   - name: sql-warehouse
     description: "SQL Warehouse para leer/escribir las respuestas del datathon"
     sql_warehouse:
-      id: "REEMPLAZAR_WAREHOUSE_ID"
+      id: "c6d413e83558a43d"
       permission: CAN_USE

@@ -126,3 +126,11 @@ class Store:
     def actualizar_estado(self, registro_id: str, estado: str):
         self._exec(f"UPDATE {self.tabla} SET estado = :e WHERE id = :id",
                    [self._s("e", estado), self._s("id", registro_id)])
+
+    def eliminar_pendiente(self, usuario: str, pregunta_id: str):
+        """Borra el envío de evidencia en revisión de un usuario para una pregunta,
+        para que pueda devolverse y reenviar uno nuevo."""
+        self._exec(
+            f"""DELETE FROM {self.tabla}
+                WHERE usuario = :u AND pregunta = :q AND estado = 'pendiente'""",
+            [self._s("u", usuario), self._s("q", pregunta_id)])

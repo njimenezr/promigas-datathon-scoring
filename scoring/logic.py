@@ -15,6 +15,24 @@ NIVEL_LABEL = {"basico": "🟢 Básico", "medio": "🟡 Medio",
 TRACK_LABEL = {"data_engineer": "🛠️ Data Engineer",
                "analytics_engineer": "📊 Analytics Engineer"}
 
+# Consulta de consumo de DBUs (Genie). Se corre UNA vez por track y se registra
+# como evidencia (el total depende de la actividad de cada participante).
+CONSULTA_DBUS = """SELECT
+  usage_metadata.genie.surface    AS genie_surface,
+  usage_metadata.genie.channel    AS genie_channel,
+  identity_metadata.run_by         AS user_email,
+  SUM(usage_quantity)             AS total_dbus,
+  COUNT(*)                         AS num_records
+FROM system.billing.usage
+WHERE usage_metadata.genie.channel IS NOT NULL
+  AND usage_date >= '2026-09-20'
+GROUP BY
+  usage_metadata.genie.surface,
+  usage_metadata.genie.channel,
+  identity_metadata.run_by
+ORDER BY total_dbus DESC
+LIMIT 20;"""
+
 
 @dataclass
 class Pregunta:
@@ -27,6 +45,7 @@ class Pregunta:
     esperado: object = None          # int/float/None
     alias: tuple = ()                 # respuestas de texto aceptadas (normalizadas)
     decimales: int = 1
+    consulta: str = ""                # SQL opcional para copiar/pegar en la app
 
     @property
     def puntos(self) -> int:
@@ -52,6 +71,9 @@ PREGUNTAS: list[Pregunta] = [
     _p("DE-4", "data_engineer", "basico", 4, "int", "Columnas en bronce_despachos", 25),
     _p("DE-5", "data_engineer", "basico", 5, "int", "Días distintos en fecha_despacho (válidos)", 365),
     _p("DE-6", "data_engineer", "basico", 6, "int", "Nodos de salida distintos (válidos)", 8),
+    _p("DE-DBU", "data_engineer", "basico", 99, "evidencia",
+       "Observabilidad de consumo: corre la consulta UNA vez y registra tus DBUs (pega tu total_dbus)",
+       consulta=CONSULTA_DBUS),
     # Medio
     _p("DE-7", "data_engineer", "medio", 7, "int", "Filas en calidad_datos_cuarentena", 985),
     _p("DE-8", "data_engineer", "medio", 8, "int", "Filas válidas en plata_despachos", 12935),
@@ -97,6 +119,9 @@ PREGUNTAS: list[Pregunta] = [
     _p("AE-5", "analytics_engineer", "basico", 5, "float", "avg(antiguedad_unidad)", 14.5),
     _p("AE-6", "analytics_engineer", "basico", 6, "texto", "Remitente con más despachos",
        alias=("gases del caribe",)),
+    _p("AE-DBU", "analytics_engineer", "basico", 99, "evidencia",
+       "Observabilidad de consumo: corre la consulta UNA vez y registra tus DBUs (pega tu total_dbus)",
+       consulta=CONSULTA_DBUS),
     # Medio
     _p("AE-7", "analytics_engineer", "medio", 7, "int", "Mes con más despachos", 7),
     _p("AE-8", "analytics_engineer", "medio", 8, "int", "Mes con menos despachos", 2),

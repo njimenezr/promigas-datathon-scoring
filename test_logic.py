@@ -12,8 +12,8 @@ def check(nombre, cond):
 print("== Conteo de preguntas ==")
 de = [p for p in L.PREGUNTAS if p.track == "data_engineer"]
 ae = [p for p in L.PREGUNTAS if p.track == "analytics_engineer"]
-check(f"DE tiene 36 ítems (={len(de)})", len(de) == 36)
-check(f"AE tiene 35 ítems (={len(ae)})", len(ae) == 35)
+check(f"DE tiene 37 ítems (={len(de)})", len(de) == 37)
+check(f"AE tiene 36 ítems (={len(ae)})", len(ae) == 36)
 check("IDs únicos", len(L.POR_ID) == len(L.PREGUNTAS))
 
 print("\n== Validación de valores correctos ==")
@@ -66,9 +66,9 @@ print("\n== Leaderboard: puntaje y desempate por tiempo ==")
 t0 = 1_000_000.0
 regs = [
     # ana: básico DE completo (6×10=60), rápido
-    *[L.Registro("ana", p.id, True, 10, "auto", t0 + i) for i, p in enumerate(L.preguntas_de("data_engineer", "basico"))],
+    *[L.Registro("ana", p.id, True, 10, "auto", t0 + i) for i, p in enumerate(p for p in L.preguntas_de("data_engineer", "basico") if p.auto)],
     # beto: mismo puntaje pero más lento
-    *[L.Registro("beto", p.id, True, 10, "auto", t0 + 100 + i) for i, p in enumerate(L.preguntas_de("data_engineer", "basico"))],
+    *[L.Registro("beto", p.id, True, 10, "auto", t0 + 100 + i) for i, p in enumerate(p for p in L.preguntas_de("data_engineer", "basico") if p.auto)],
     # ana además una de medio (20) -> más puntos
     L.Registro("ana", "DE-7", True, 20, "auto", t0 + 50),
     # intento incorrecto no suma
@@ -83,8 +83,8 @@ check("ana no cuenta DE-1 dos veces (6+1 resueltas de básico+medio=7)", lb[0]["
 
 # empate a puntos -> desempate por tiempo
 regs_empate = [
-    *[L.Registro("rapido", p.id, True, 10, "auto", t0 + i) for i, p in enumerate(L.preguntas_de("data_engineer", "basico"))],
-    *[L.Registro("lento", p.id, True, 10, "auto", t0 + 500 + i) for i, p in enumerate(L.preguntas_de("data_engineer", "basico"))],
+    *[L.Registro("rapido", p.id, True, 10, "auto", t0 + i) for i, p in enumerate(p for p in L.preguntas_de("data_engineer", "basico") if p.auto)],
+    *[L.Registro("lento", p.id, True, 10, "auto", t0 + 500 + i) for i, p in enumerate(p for p in L.preguntas_de("data_engineer", "basico") if p.auto)],
 ]
 lb2 = L.leaderboard(regs_empate, track="data_engineer")
 check("empate a 60: gana el más rápido", lb2[0]["usuario"] == "rapido" and lb2[1]["usuario"] == "lento")
